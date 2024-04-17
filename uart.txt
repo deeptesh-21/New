@@ -1,0 +1,157 @@
+#include <avr/io.h>
+#include <util/delay.h>
+
+#define BUFFER_SIZE 4
+
+void usart_init() {
+
+	// Set the baudrate to 9600
+	UBRR0 = 103;
+
+	// Set the mode of operation as asynchronous
+	UCSR0C &= ~(1 << UMSEL01) & ~(1 << UMSEL00);
+
+	// Set the frame format
+	// No Parity
+	UCSR0C &= ~(1 << UPM01) & ~(1 << UPM00);
+
+	// Single stop bit
+	UCSR0C &= (1 << USBS0);
+
+	// 8 bit character size
+	UCSR0C |= (1 << UCSZ01) | ( 1<< UCSZ00);
+	UCSR0B &= (1 << UCSZ02);
+
+	// Enable the transmitter
+	UCSR0B |= (1 << TXEN0);
+
+}
+
+void usart_send_data(unsigned char data) {
+
+	// Wait for the usart data register to become empty
+	while (!(UCSR0A & (1 << UDRE0)));
+
+	// Send the 8 bits
+	UDR0 = data;
+
+}
+
+void adc_init() {
+
+	// Disable the digital input on pin 5
+	DIDR0 |= (1 << ADC5D);
+
+	// Set the reference voltage to AVCC
+	ADMUX &= ~(1 << REFS1);
+	ADMUX |= (1 << REFS0);
+
+	// Right adjusted data
+	ADMUX &= ~(1 << ADLAR);
+
+	// Select the ADC5 channel 
+	ADMUX |= (1 << MUX2) | (1 << MUX0);
+
+	// Enable the ADC
+	ADCSRA |= (1 << ADEN);
+
+}
+
+unsigned char adc_read_data() {
+
+	unsigned char adc_data_l;
+	unsigned char adc_data_h;
+
+	// Start the ADC conversion
+	ADCSRA |= (1 << ADSC);
+
+	// Wait while the ADSC flag is high
+	while (ADCSRA & (1 << ADSC));
+
+	// Read the ADCL register
+	adc_data_l = ADCL;
+	adc_data_h = ADCH;
+
+	// Return the lower byte
+	return adc_data_l;
+
+}
+
+unsigned short int adc_read_data_10_bit() {
+
+	unsigned char adc_data_l;
+	unsigned char adc_data_h;
+
+	// Start the ADC conversion
+	ADCSRA |= (1 << ADSC);
+
+	// Wait while the ADSC flag is high
+	while (ADCSRA & (1 << ADSC));
+
+	// Read the ADCL register
+	adc_data_l = ADCL;
+	adc_data_h = ADCH;
+
+	// Return the 10 bit
+	return ((adc_data_h << 8) | adc_data_l);
+
+}
+
+void usart_send_10_bit(unsigned short int data) {
+
+	unsigned char buffer[BUFFER_SIZE];
+
+	unsigned char remainder = 0;
+	char tos = 0;
+
+	while (data > 0) {
+
+		remainder = data % 10;
+		buffer[tos++] = remainder + 48;
+		data = data / 10;
+
+	}
+
+	if (tos == BUFFER_SIZE) tos = BUFFER_SIZE - 1;
+
+	while (tos >= 0) {
+
+		usart_send_data(buffer[tos--]);
+
+	}
+	
+	usart_send_data('\n');
+
+}
+
+int main() {
+	
+	// Initialize the USART
+	usart_init();
+
+	// Initialize the ADC
+	adc_init();
+
+	// unsigned char adc_data;
+	unsigned short int adc_data;
+
+	_delay_ms(1000);
+
+	while (1) {
+
+		adc_data = adc_read_data_10_bit();
+
+		// Convert the decimal to ASCII
+		// adc_data += 48; 
+
+		// usart_send_data(adc_data);
+		// usart_send_data('\n');
+
+		usart_send_10_bit(adc_data);
+
+		_delay_ms(50);
+
+	}
+
+  	return 0;
+}

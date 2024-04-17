@@ -1,0 +1,13 @@
+{
+	"folders": [
+        {
+            "name": "ATMEGA328P_OTHER",
+            "path": "../ATMEGA328P_OTHER"
+        }
+    ],
+    "settings": {
+        "files.associations": {
+            "twi_slave.h": "c"
+        }
+    }
+}

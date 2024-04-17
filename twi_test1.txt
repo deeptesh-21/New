@@ -1,0 +1,158 @@
+/*
+This is a program to demonstrate TWI slave receiver mode
+*/
+#define F_CPU 16000000
+#include <avr/io.h>
+#include <util/delay.h>
+#define SLA_W_RECEIVED_ACK 0x60
+#define DATA_RECEIVED_ACK 0x80
+#define STOP_RECEIVED_ACK 0xA0
+
+void TWI_slave_init(unsigned char);
+void TWI_slave_address_match(void);
+unsigned char TWI_slave_receive_data(void);
+void TWI_slave_receive_STOP(void);
+
+void UART_init(void);
+void UART_send_data(unsigned char);
+
+int main(){
+
+	unsigned char slave_address = 0x0F;
+	unsigned char received_data;
+	TWI_slave_init(slave_address);
+	UART_init();
+
+	while(1){
+	    TWI_slave_address_match();
+		received_data = TWI_slave_receive_data();
+		UART_send_data(received_data);
+        // TWI_slave_receive_STOP();
+        // _delay_ms(1000);
+	}
+
+	return 0;
+}
+
+void TWI_slave_init(unsigned char slave_address){
+
+	/*
+		This is a function to initialize TWI slave
+		1. Enable Pull-UP on TWI slave
+		2. Enable acknowledgement bit TWEA
+		3. Set Slave Address in TWAR
+	*/
+
+	DDRC &= ~(1 << DDC4) & ~(1 << DDC5);
+	PORTC |= (1 << PORTC4) | (1 << PORTC5);
+
+	TWAR = (slave_address << 1);
+}
+
+void TWI_slave_address_match(void){
+	/*
+		This is a function to respond to TWI master SLA+W call
+		1. Set TWEN
+		2. Set TWEA
+	*/
+
+	TWCR |= (1 << TWEN) | (1 << TWEA) | (1 << TWINT);
+
+	/*
+		wait until the slave is addressed by the master
+	*/
+
+	while(!(TWCR & (1 << TWINT)));
+
+	/*
+		Check whether the SLA+W was received and ACK was transmitted
+	*/
+	while((TWSR & 0xF8) != SLA_W_RECEIVED_ACK);
+}
+
+unsigned char TWI_slave_receive_data(void){
+	/*
+		This is a function to receive data from master
+		1. Set TWEN
+		2. Set TWEA
+		3. Set TWINT (Clear TWINT flag)
+	*/
+
+	unsigned char data;
+
+	TWCR |= (1 << TWEN) | (1 << TWEA) | (1 << TWINT);
+
+	/*
+		Wait till the master transmits the data
+	*/
+
+	while(!(TWCR & (1 << TWINT)));TWCR |= (1 << TWEN) | (1 << TWEA) | (1 << TWINT);
+
+	/*
+		Check whether the data was received and acknowledgement was sent
+	*/
+
+	while((TWSR & 0xF8) != DATA_RECEIVED_ACK);
+
+	data = TWDR;
+
+	return data;
+}
+
+void TWI_slave_receive_STOP(void){
+    /*
+        This fucntion to used to check the stop condition
+        1. Enable TWEN
+        2. Enable TWEA
+        3. Clear TWINT
+    */
+
+   TWCR |= (1 << TWEN) | (1 << TWEA) | (1 << TWINT);
+
+   while(!(TWCR & (1 << TWINT)));
+
+   while((TWSR & 0xF8) != STOP_RECEIVED_ACK);
+
+}
+
+void UART_init(void){
+	/*
+		This is a function to initialize the UART
+		1. Set the baudrate to 9600 - UBRR = 103
+		2. Select the mode of operation - Asynchronous mode - UMSEL01 = 0 and UMSEL00 = 0 in UCSR0C register
+		3. Disable the parity mode - UPM01 = 0 and UPM00 = 0 in UCSR0C register
+		4. Select the stop bit to 1 - USBS0 = 0 in UCSR0C register
+		5. Select the character size to be 8 bits - UCSZ01 = 1 and UCSZ00 = 1 in UCSR0A and UCSZ02 = 0 in UCSR0B 
+		6. Enable the transmitter - TXEN0 = 1 in UCSR0B
+	*/
+
+	UBRR0 = 103;
+
+	UCSR0C &= ~(1 << UMSEL01) & ~(1 << UMSEL00);
+
+	UCSR0C &= ~(1 << UPM01) & ~(1 << UPM00);
+
+	UCSR0C &= ~(1 << USBS0);
+
+	UCSR0C |= (1 << UCSZ01) | (1 << UCSZ00);
+
+	UCSR0B &= ~(1 << UCSZ02);
+
+	UCSR0B |= (1 << TXEN0);
+}
+
+void UART_send_data(unsigned char data){
+
+	/*
+		This function is used to send data on UART
+		1. Check UDRE0 to see if the transmitter buffer is empty, as soon as it is empty load data in UDR0 register. UDRE0 = 1 when buffer is empty
+		2. Load data in UDR0;
+	*/
+
+	while(!(UCSR0A & (1 << UDRE0)));
+
+	UDR0 = data;
+}
+
+
+
